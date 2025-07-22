@@ -13,7 +13,6 @@ def create_table():
             article_id TEXT PRIMARY KEY,
             timestamp TEXT,
             title TEXT,
-            author TEXT,
             description TEXT,
             url TEXT,
             political_affiliation TEXT,
