@@ -6,7 +6,7 @@ import sqlite3, csv
 def getConnection():
     return sqlite3.connect('db/articles.db')
 
-def create_table():
+def create_articles_table():
     connection = getConnection()
     cursor = connection.cursor()
     cursor.execute('''
@@ -24,6 +24,21 @@ def create_table():
             assumptions TEXT,
             num_assumptions INTEGER,
             is_fact_checked INTEGER DEFAULT 0
+        )
+    ''')
+    connection.commit()
+    connection.close()
+
+def create_economic_data_table():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS economic_data (
+            research_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            title TEXT,
+            authors TEXT,
+            source TEXT,
         )
     ''')
     connection.commit()
@@ -67,6 +82,33 @@ def insert_articles(data, political_leaning):
     connection.commit()
     connection.close()
     print(f"Inserted {len(articles)} articles. Duplicates skipped")
+
+def insert_economic_data(data):
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO economic_data(
+            date, title, authors, source, content
+        ) VALUES (?, ?, ?, ?, ?)''', 
+        (
+            data.get("date"),
+            data.get("title"),
+            data.get("authors"),
+            data.get("source"),
+            data.get("content")
+        )
+    )
+    connection.commit()
+    connection.close()
+
+def fetch_unadded_economic_data():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT research_id, date, title, authors, source, content FROM economic_data WHERE in_pinecone = ?", (0,))
+    data = cursor.fetchall()
+    connection.commit()
+    connection.close()
+    return data
 
 # to check if everything is being added correctly
 def fetch_all_articles():
@@ -125,4 +167,36 @@ def fetch_claims(id):
         SELECT claims FROM articles WHERE article_id = ?
     ''', (id,))
     claims = cursor.fetchone()
+    connection.commit()
+    connection.close()
     return claims
+
+def mark_as_added_to_pinecone(research_id):
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        UPDATE economic_data
+        SET in_pinecone = ?
+        WHERE research_id = ?
+    ''', (1, research_id))
+    connection.commit()
+    connection.close()
+
+def fetch_unchecked_articles():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT article_id, content FROM articles WHERE is_fact_checked = ?", (0))
+    articles = cursor.fetchall()
+    connection.commit()
+    connection.close()
+    return articles
+
+
+def temp():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        ALTER TABLE 'economic_data' ADD COLUMN in_pinecone INTEGER DEFAULT 0;
+    ''')
+    connection.commit()
+    connection.close()
