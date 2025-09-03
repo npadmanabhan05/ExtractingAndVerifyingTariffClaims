@@ -1,6 +1,5 @@
 import sqlite3, csv
 
-
 # this file will hold any functions that execute operations related to the database (creating the database, inserting an article, etc.)
 
 def getConnection():
@@ -23,6 +22,8 @@ def create_articles_table():
             num_claims INTEGER,
             assumptions TEXT,
             num_assumptions INTEGER,
+            supported_claims TEXT,
+            num_supported_claims INTEGER,
             is_fact_checked INTEGER DEFAULT 0
         )
     ''')
@@ -39,6 +40,8 @@ def create_economic_data_table():
             title TEXT,
             authors TEXT,
             source TEXT,
+            content TEXT,
+            in_pinecone INTEGER DEFAULT 0
         )
     ''')
     connection.commit()
@@ -60,8 +63,8 @@ def insert_articles(data, political_leaning):
                 INSERT OR IGNORE INTO articles(
                     timestamp, title, author, description, url, 
                     source, political_affiliation, claims, num_claims, 
-                    assumptions, num_assumptions, is_fact_checked
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    assumptions, num_assumptions, supported_claims, num_supported_claims, is_fact_checked
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
                     article.get("publishedAt"),
                     article.get("title"),
@@ -74,6 +77,8 @@ def insert_articles(data, political_leaning):
                     None, 
                     None, 
                     None, 
+                    None,
+                    None,
                     0
                 )
             )
@@ -86,18 +91,21 @@ def insert_articles(data, political_leaning):
 def insert_economic_data(data):
     connection = getConnection()
     cursor = connection.cursor()
-    cursor.execute('''
-        INSERT OR IGNORE INTO economic_data(
-            date, title, authors, source, content
-        ) VALUES (?, ?, ?, ?, ?)''', 
-        (
-            data.get("date"),
-            data.get("title"),
-            data.get("authors"),
-            data.get("source"),
-            data.get("content")
+    cursor.execute("SELECT exists (SELECT 1 FROM economic_data WHERE content = ?)", (data.get("content"),))
+    if (cursor.fetchone()[0]== 0):
+        cursor.execute('''
+            INSERT OR IGNORE INTO economic_data(
+                date, title, authors, source, content, in_pinecone
+            ) VALUES (?, ?, ?, ?, ?, ?)''', 
+            (
+                data.get("date"),
+                data.get("title"),
+                data.get("authors"),
+                data.get("source"),
+                data.get("content"),
+                0
+            )
         )
-    )
     connection.commit()
     connection.close()
 
@@ -110,26 +118,111 @@ def fetch_unadded_economic_data():
     connection.close()
     return data
 
-# to check if everything is being added correctly
-def fetch_all_articles():
+def fetch_all_economic_data():
     connection = getConnection()
     cursor = connection.cursor()
-    cursor.execute("SELECT title, url, source, political_affiliation FROM articles")
+    cursor.execute("SELECT title FROM economic_data")
     rows = cursor.fetchall()
-    with open('exported_articles.csv', mode='w', newline='', encoding='utf-8') as file:
+    print(len(rows))
+    with open('exported_economic_data.csv', mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(["Title", "Url", "Source", "Political Affiliation"])
-
+        writer.writerow(["Title"])
         for row in rows:
             writer.writerow(row)
-    print(f"Exported {len(rows)} articles to exported_articles.csv")
+    print(f"Exported {len(rows)} papers to exported_economic_data.csv")
+    connection.commit()
+    connection.close()
+
+# to check if everything is being added correctly
+def fetch_all_article_claims():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT article_id, claims FROM articles WHERE political_affiliation=? OR political_affiliation=?", ("Left", "Center-Left"))
+    rows = cursor.fetchall()
+    with open('exported_claims_left.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Article ID", "Claims"])
+        for row in rows:
+            writer.writerow([row[0], row[1]])
+    cursor.execute("SELECT article_id, claims FROM articles WHERE political_affiliation=?", ("Center",))
+    rows = cursor.fetchall()
+    with open('exported_claims_center.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Article ID", "Claims"])
+        for row in rows:
+            writer.writerow([row[0], row[1]])
+    cursor.execute("SELECT article_id, claims FROM articles WHERE political_affiliation=? OR political_affiliation=?", ("Right", "Center-Right"))
+    rows = cursor.fetchall()
+    with open('exported_claims_right.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Article ID", "Claims"])
+        for row in rows:
+            writer.writerow([row[0], row[1]])
+    print(f"Exported {len(rows)} claims")
+    connection.commit()
+    connection.close()
+
+def fetch_all_article_facts():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT supported_claims FROM articles WHERE political_affiliation=? OR political_affiliation=?", ("Left", "Center-Left"))
+    rows = cursor.fetchall()
+    with open('exported_facts_left.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow("Supported Claims")
+        for row in rows:
+            writer.writerow(row)
+    cursor.execute("SELECT supported_claims FROM articles WHERE political_affiliation=?", ("Center",))
+    rows = cursor.fetchall()
+    with open('exported_facts_center.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow("Supported Claims")
+        for row in rows:
+            writer.writerow(row)
+    cursor.execute("SELECT supported_claims FROM articles WHERE political_affiliation=? OR political_affiliation=?", ("Right", "Center-Right"))
+    rows = cursor.fetchall()
+    with open('exported_facts_right.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow("Supported Claims")
+        for row in rows:
+            writer.writerow(row)
+    print(f"Exported {len(rows)} facts")
+    connection.commit()
+    connection.close()
+
+def fetch_all_article_assumptions():
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT assumptions FROM articles WHERE political_affiliation=? OR political_affiliation=?", ("Left", "Center-Left"))
+    rows = cursor.fetchall()
+    with open('exported_assumptions_left.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow("Assumptions")
+        for row in rows:
+            writer.writerow(row)
+        print(f"exported {len(rows)} articles")
+    cursor.execute("SELECT assumptions FROM articles WHERE political_affiliation=?", ("Center",))
+    rows = cursor.fetchall()
+    with open('exported_assumptions_center.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow("Assumptions")
+        for row in rows:
+            writer.writerow(row)
+    cursor.execute("SELECT assumptions FROM articles WHERE political_affiliation=? OR political_affiliation=?", ("Right", "Center-Right"))
+    rows = cursor.fetchall()
+    with open('exported_assumptions_right.csv', mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow("Assumptions")
+        for row in rows:
+            writer.writerow(row)
+    print(f"Exported {len(rows)} assumptions")
     connection.commit()
     connection.close()
 
 def fetch_no_claim_articles():
     connection = getConnection()
     cursor = connection.cursor()
-    cursor.execute("SELECT article_id, content from articles WHERE claims IS NULL")
+    cursor.execute("SELECT article_id, content from articles WHERE claims IS NULL AND content IS NOT NULL")
     unchecked_articles = cursor.fetchall()
     if not unchecked_articles: 
         print("None")
@@ -160,6 +253,41 @@ def set_claims(id, claims):
     connection.commit()
     connection.close()
 
+def set_assumptions(id, assumptions, num_assumptions): 
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        UPDATE articles
+        SET assumptions = ?,
+            num_assumptions = ?
+        WHERE article_id = ?;
+    ''', (assumptions, num_assumptions, id))
+    connection.commit()
+    connection.close()
+
+def set_supported_claims(id, facts, num_supported_claims): 
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        UPDATE articles
+        SET supported_claims = ?,
+            num_supported_claims = ?
+        WHERE article_id = ?;
+    ''', (facts, num_supported_claims, id))
+    connection.commit()
+    connection.close()
+
+def declare_as_fact_checked(id):
+    connection = getConnection()
+    cursor = connection.cursor()
+    cursor.execute('''
+        UPDATE articles
+        SET is_fact_checked = ?
+        WHERE article_id = ?;
+    ''', (1, id))
+    connection.commit()
+    connection.close()
+
 def fetch_claims(id):
     connection = getConnection()
     cursor = connection.cursor()
@@ -185,18 +313,15 @@ def mark_as_added_to_pinecone(research_id):
 def fetch_unchecked_articles():
     connection = getConnection()
     cursor = connection.cursor()
-    cursor.execute("SELECT article_id, content FROM articles WHERE is_fact_checked = ?", (0))
+    cursor.execute("SELECT article_id, claims FROM articles WHERE is_fact_checked = ? AND claims IS NOT NULL", (0,))
     articles = cursor.fetchall()
     connection.commit()
     connection.close()
     return articles
 
-
-def temp():
+def fetch_economic_info(id):
     connection = getConnection()
     cursor = connection.cursor()
-    cursor.execute('''
-        ALTER TABLE 'economic_data' ADD COLUMN in_pinecone INTEGER DEFAULT 0;
-    ''')
-    connection.commit()
-    connection.close()
+    cursor.execute("SELECT content FROM economic_data WHERE research_id = ?", (id,))
+    text = cursor.fetchone()
+    return text[0] if text else ""

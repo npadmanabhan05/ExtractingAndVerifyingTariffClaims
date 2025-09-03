@@ -1,4 +1,4 @@
-import os, requests, json
+import os, requests, json, fitz
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -9,7 +9,6 @@ client = OpenAI(api_key = OPENAI_API_KEY)
 CORE_API_KEY = os.getenv("CORE_API_KEY")
 
 # for statistical data
-# indicators should be a map of the indicator mapped to its specific code \
 def get_world_bank_data(indicators): 
     indicator_data = {}
     for key in indicators: 
@@ -41,20 +40,34 @@ def get_world_bank_data(indicators):
         indicator_data[key] = text_representation
     return indicator_data
 
+
 # for economic reserch papers
-
-
-def get_economic_research_full_text():
-    url = "https://api.core.ac.uk/v3/search/works?q=tariffs"
+def get_economic_research_full_text(params):
+    url = f"https://api.core.ac.uk/v3/search/works?"
     headers = {
         "Authorization" : f"Bearer {CORE_API_KEY}"
     }
-    response = requests.get(url, headers = headers)
+    response = requests.get(url, headers = headers, params = params)
+    if (response.status_code != 200) :
+        return "no params", None
     economic_research = response.json()
-    return economic_research.get("results")
+    params = {
+        "scrollId" : economic_research.get("scrollId")
+    }
+    if (economic_research is None) :
+        return params, None
+    return params, economic_research.get("results")
 
 
 # used to convert the json formatted responses from the other apis to simple text that can easily be embedded 
 
-    
+def get_pdf_text(file):
+    try:
+        doc = fitz.open(file)
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text()
+        return full_text
+    except Exception as e:
+        print(f"An error occured: {e}")
 

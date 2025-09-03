@@ -8,8 +8,6 @@ API_KEY = os.getenv("OPEN_AI_KEY")
 client = OpenAI(api_key = API_KEY)
 # articles here is a list of various tuples that represent the individual articles
 articles = fetch_no_claim_articles()
-print(len(articles))
-print ("\n")
 for article in articles: 
     id = article[0]
     text = article[1]
@@ -29,7 +27,7 @@ for article in articles:
                                 claim 2,
                                 etc.
                             ]
-
+                            If there are no economic claims made, please output the following empty list: []
                             Here is the article: 
 
                                 {text}
@@ -38,14 +36,5 @@ for article in articles:
         ]
     )
     claims = response.choices[0].message.content
-    print(f"response for article {id}: ")
-    print(claims)
-    print("\n\n\n")
     set_claims(id, claims)
-
-print("claims for article 1: ")
-print(fetch_claims(1))
-print("\n\n\n")
-print("claims for article 2: ")
-print(fetch_claims(2))
 
